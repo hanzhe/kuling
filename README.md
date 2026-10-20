@@ -1,6 +1,7 @@
 # Kuling
 
-Weather for Norway on the **Nokia 8110 4G** (KaiOS 2.5 / GerdaOS), using the same open data as Yr.
+Weather on the **Nokia 8110 4G** (KaiOS 2.5 / GerdaOS), using the same open data as Yr. Norway first,
+but any place in the world works.
 It's built for a 240x320 screen and a keypad.
 
 ![Kuling](app/icons/icon112x112.png)
@@ -9,12 +10,19 @@ It's built for a 240x320 screen and a keypad.
 
 - **Now**: temperature, conditions, wind with a direction arrow, rain over the next hour,
   and the next four hours
-- **Rain radar for the next 90 minutes** (MET nowcast), in 5-minute steps: "Rain in ~20 min",
-  "Rain stops in ~10 min"
+- **Rain radar for the next 90 minutes** (MET nowcast, Nordic radar area only), in 5-minute steps:
+  "Rain in ~20 min", "Rain stops in ~10 min"
 - **Hours**: hour by hour for 48 hours, with temperature, precipitation and wind
 - **Days**: 9 days, with high/low, total precipitation, strongest wind and a daytime symbol
-- **Places**: search any Norwegian place name (Kartverket), or use **My location** (GPS, named after
-  the municipality). Up to 9 places, on number keys 1-9.
+- **Places, worldwide**: search finds Norwegian places through Kartverket (down to farms, peaks and
+  lakes) and places anywhere else through Open-Meteo/GeoNames. Norwegian results come first and
+  duplicates are merged. **My location** uses GPS (named after the municipality in Norway). Up to 9
+  places, on number keys 1-9.
+- **Local time**: every time and date is shown in the place's own time zone. When that differs
+  from the phone's, the header says so (e.g. `16:29 UTC-4`). The day icon is the 6-hour block
+  nearest local noon.
+- **Letters the keypad lacks**: in search, SoftRight opens a picker with æ ø å ä ö ü é è á à ó í ú ñ ç ß.
+  Typing `aa`, `oe` or `ae` also finds å, ø and æ names ("Aalesund" finds Ålesund).
 - Polite caching: forecasts are reused until MET's `Expires` time and revalidated with
   `If-Modified-Since`, which saves data and follows the API terms
 - Shows the last saved forecast when offline
@@ -32,14 +40,18 @@ It's built for a 240x320 screen and a keypad.
 | | SoftRight | Remove the selected place |
 | | SoftLeft / Back | Back |
 | Search | Type, then Enter | Search (T9 works; `#` switches input mode) |
+| | SoftRight | Letter picker (æ ø å ...): arrows to choose, Enter inserts, SoftLeft closes |
 | | Down / Up, Enter | Pick a result to add it |
 
 ## Data and credits
 
 - Forecasts: [MET Norway](https://api.met.no/) Locationforecast 2.0 and Nowcast 2.0,
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Shown in the app as "Data: MET Norway".
-- Place names and municipalities: [Kartverket](https://www.kartverket.no/) via ws.geonorge.no,
-  CC BY 4.0.
+- Place names and municipalities in Norway: [Kartverket](https://www.kartverket.no/) via
+  ws.geonorge.no, CC BY 4.0.
+- Places outside Norway and each place's time zone: [Open-Meteo](https://open-meteo.com/) geocoding
+  (data from [GeoNames](https://www.geonames.org/), CC BY 4.0) and forecast API (`timezone=auto`),
+  free for non-commercial use, CC BY 4.0.
 - Weather symbols: [metno/weathericons](https://github.com/metno/weathericons), MIT, © Yr.
   The license is in `app/weather/LICENSE`.
 
@@ -174,6 +186,14 @@ To undo: `adb shell stop b2g`, copy the original `cert9.db` back (and the `key4.
   Let's Encrypt roots (ISRG X1/X2) were already in this GerdaOS phone's database, stored the same
   way (legacy trust record plus signatures, added before this project), which is why those sites
   work.
+
+### Limits
+
+- The rain radar covers the Nordic countries only. Elsewhere MET answers 422 and the block is
+  hidden; Kuling remembers that for a day instead of asking again.
+- A place's UTC offset is refreshed every 12 hours. Within the 9-day outlook, times after a
+  daylight-saving switch in that place are off by an hour until the next refresh. Gecko 48 has no
+  time zone database for arbitrary zones, so the offset comes from Open-Meteo.
 
 ## Requirements
 

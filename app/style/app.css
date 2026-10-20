@@ -80,3 +80,9 @@ body { font: 15px/1.2 sans-serif; overflow: hidden; }
 .q { display: block; box-sizing: border-box; width: 224px; margin: 8px; padding: 6px; font-size: 16px;
      border: 2px solid #1b6ec2; background: #fff; color: #0d1b2a; }
 .s-status { padding: 0 8px 4px; font-size: 12px; color: #8aa4bf; }
+
+/* Letter picker (search): 8 columns, sits above the softkeys. */
+#picker { position: fixed; left: 4px; right: 4px; bottom: 30px; padding: 4px; background: #10263d;
+          border: 1px solid #1b6ec2; border-radius: 3px; text-align: center; line-height: 30px; }
+#picker span { display: inline-block; width: 26px; font-size: 18px; color: #f1f5f9; }
+#picker span.sel { background: #ffd23f; color: #0d1b2a; font-weight: bold; border-radius: 3px; }

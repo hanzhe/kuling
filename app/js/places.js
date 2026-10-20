@@ -66,6 +66,52 @@
     return out;
   }
 
+  // Open-Meteo geocoding (GeoNames, worldwide) result -> places. sub: "Region, Country".
+  function parseGlobalSearch(json) {
+    var out = [];
+    var results = (json && json.results) || [];
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      if (typeof r.latitude !== 'number' || typeof r.longitude !== 'number' || !r.name) continue;
+      var parts = [];
+      if (r.admin1 && r.admin1 !== r.name) parts.push(r.admin1);
+      if (r.country) parts.push(r.country);
+      out.push(makePlace(r.name, parts.join(', '), r.latitude, r.longitude));
+    }
+    return out;
+  }
+
+  // Same name within ~3 km counts as the same place.
+  var SAME_SPOT_DEG = 0.03;
+
+  function sameSpot(a, b) {
+    return a.name.toLowerCase() === b.name.toLowerCase() &&
+      Math.abs(a.lat - b.lat) < SAME_SPOT_DEG && Math.abs(a.lon - b.lon) < SAME_SPOT_DEG * 2;
+  }
+
+  // Concatenates result lists in priority order, dropping duplicates, capped at `max`.
+  function mergeResults(lists, max) {
+    var out = [];
+    for (var i = 0; i < lists.length; i++) {
+      for (var j = 0; j < lists[i].length && out.length < max; j++) {
+        var dup = false;
+        for (var k = 0; k < out.length && !dup; k++) dup = sameSpot(out[k], lists[i][j]);
+        if (!dup) out.push(lists[i][j]);
+      }
+    }
+    return out;
+  }
+
+  // Old/keyboard-friendly Norwegian spellings: "Aalesund" -> "Ålesund", "Tromsoe" -> "Tromsø".
+  // Returns null when there is nothing to convert.
+  function norwegianVariant(text) {
+    var v = text
+      .replace(/aa/g, 'å').replace(/Aa|AA/g, 'Å')
+      .replace(/ae/g, 'æ').replace(/Ae|AE/g, 'Æ')
+      .replace(/oe/g, 'ø').replace(/Oe|OE/g, 'Ø');
+    return v === text ? null : v;
+  }
+
   // Geonorge /kommuneinfo/v1/punkt result -> municipality name, or null (e.g. outside Norway).
   function municipalityName(json) {
     return json && typeof json.kommunenavn === 'string' && json.kommunenavn ? json.kommunenavn : null;
@@ -81,6 +127,9 @@
     removePlace: removePlace,
     cleanPlaces: cleanPlaces,
     parseSearch: parseSearch,
-    municipalityName: municipalityName
+    municipalityName: municipalityName,
+    parseGlobalSearch: parseGlobalSearch,
+    mergeResults: mergeResults,
+    norwegianVariant: norwegianVariant
   };
 })(this);

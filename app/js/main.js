@@ -15,6 +15,10 @@
   var SCROLL_PX = 60;
   var RERENDER_MS = 60000;
   var GPS_OPTIONS = { enableHighAccuracy: false, timeout: 30000, maximumAge: 10 * 60000 };
+  // Letters the KaiOS keypad may not offer, inserted from the search screen (SoftRight).
+  var PICKER_CHARS = ['\u00E6', '\u00F8', '\u00E5', '\u00E4', '\u00F6', '\u00FC', '\u00E9', '\u00E8',
+                      '\u00E1', '\u00E0', '\u00F3', '\u00ED', '\u00FA', '\u00F1', '\u00E7', '\u00DF'];
+  var PICKER_COLUMNS = 8;
   var DEFAULT_PLACES = [places.makePlace('Oslo', 'By, Oslo', 59.9133, 10.7389)];
 
   var savedPlaces = places.cleanPlaces(store.get(PLACES_KEY));
@@ -31,7 +35,9 @@
     loadedKey: null,
     menuIndex: 0,
     searchResults: [],
-    searchFocus: -1
+    searchFocus: -1,
+    picker: -1,           // selected letter in the picker, -1 = closed
+    tz: null              // {offset, name} of the shown place; null = phone time until known
   };
   var loadSeq = 0;
 
@@ -59,8 +65,12 @@
   function render() {
     if (state.screen !== 'weather') return;
     var p = place();
+    var now = Date.now();
+    var offset = state.tz ? state.tz.offset : null;
     var updated = state.loading ? 'updating...' : (state.forecast && state.forecast.updatedAt ?
-      fc.hhmm(new Date(state.forecast.updatedAt)) : '');
+      fc.hhmm(state.forecast.updatedAt, offset) : '');
+    // Mark places whose clock differs from the phone's, so "15:00" is never ambiguous.
+    if (updated && fc.differsFromPhone(offset, now)) updated += ' ' + fc.utcLabel(offset);
     views.setHeader(p, state.current + 1, updated);
     views.setTabs(state.tab, true);
     views.setSoftkeys('Places', '', 'Refresh');
@@ -69,23 +79,28 @@
       else views.message(state.error || 'No forecast', 'Press SoftRight to try again');
       return;
     }
-    var now = Date.now();
-    if (state.tab === 'now') views.renderNow(state.forecast, state.nowcast, now);
-    else if (state.tab === 'hours') views.renderHours(state.forecast, now);
-    else views.renderDays(state.forecast, now);
+    if (state.tab === 'now') views.renderNow(state.forecast, state.nowcast, now, offset);
+    else if (state.tab === 'hours') views.renderHours(state.forecast, now, offset);
+    else views.renderDays(state.forecast, now, offset);
   }
 
   function load(force) {
     var p = place();
     var seq = ++loadSeq;
     var cachedFc = store.get('kuling.fc.' + places.placeKey(p));
+    var cachedTz = store.get('kuling.tz.' + places.placeKey(p));
     setState({ loading: true, error: null, forecast: cachedFc ? cachedFc.value : null, nowcast: null,
-               loadedKey: places.placeKey(p) });
+               loadedKey: places.placeKey(p), tz: cachedTz ? cachedTz.value : null });
     render();
+    data.timezone(p).then(function (res) {
+      if (seq !== loadSeq || !res.entry) return;
+      setState({ tz: res.entry.value });
+      render();
+    });
     data.forecast(p, force).then(function (res) {
       if (seq !== loadSeq) return;
       if (res.notYet) {
-        views.toast('Up to date. Next update ' + fc.hhmm(new Date(res.entry.expires)));
+        views.toast('Up to date. Next update ' + fc.hhmm(res.entry.expires));
       }
       if (res.error) views.toast(res.error + (res.entry ? ' (showing saved forecast)' : ''));
       setState({
@@ -196,8 +211,8 @@
     setState({ screen: 'search', searchResults: [], searchFocus: -1 });
     views.setHeader({ name: 'Search' }, 0, '');
     views.setTabs(null, false);
-    views.setSoftkeys('Back', 'Search', '');
-    views.renderSearch('', [], -1, 'Type a name, press Enter');
+    views.setSoftkeys('Back', 'Search', '\u00E6\u00F8\u00E5');
+    views.renderSearch('', [], -1, 'Any place in the world. Enter to search.');
   }
 
   function runSearch() {
@@ -208,7 +223,7 @@
       if (state.screen !== 'search') return;
       var status = res.error || (res.places.length ? res.places.length + ' found. Down to pick.' : 'Nothing found');
       setState({ searchResults: res.places, searchFocus: -1 });
-      views.setSoftkeys('Back', 'Search', '');
+      views.setSoftkeys('Back', 'Search', '\u00E6\u00F8\u00E5');
       views.renderSearch(text, res.places, -1, status);
     });
   }
@@ -218,7 +233,7 @@
     if (!n) return;
     var f = Math.max(-1, Math.min(n - 1, state.searchFocus + dir));
     setState({ searchFocus: f });
-    views.setSoftkeys('Back', f < 0 ? 'Search' : 'Add', '');
+    views.setSoftkeys('Back', f < 0 ? 'Search' : 'Add', '\u00E6\u00F8\u00E5');
     views.renderSearch(views.searchText(), state.searchResults, f, null);
   }
 
@@ -256,7 +271,46 @@
     }
   }
 
+  // ---------- letter picker ----------
+
+  function openPicker() {
+    setState({ picker: 0 });
+    views.renderPicker(PICKER_CHARS, 0, PICKER_COLUMNS);
+    views.setSoftkeys('Close', 'Insert', '');
+  }
+
+  function closePicker() {
+    setState({ picker: -1 });
+    views.hidePicker();
+    views.setSoftkeys('Back', state.searchFocus < 0 ? 'Search' : 'Add', '\u00E6\u00F8\u00E5');
+  }
+
+  function movePicker(delta) {
+    var n = PICKER_CHARS.length;
+    setState({ picker: (state.picker + delta + n) % n });
+    views.renderPicker(PICKER_CHARS, state.picker, PICKER_COLUMNS);
+  }
+
+  function onPickerKey(k) {
+    switch (k) {
+      case 'ArrowLeft': movePicker(-1); return true;
+      case 'ArrowRight': movePicker(1); return true;
+      case 'ArrowUp': movePicker(-PICKER_COLUMNS); return true;
+      case 'ArrowDown': movePicker(PICKER_COLUMNS); return true;
+      case 'Enter': {
+        var ch = PICKER_CHARS[state.picker];
+        setState({ searchFocus: -1 });
+        closePicker();
+        views.insertText(ch);
+        return true;
+      }
+      case 'SoftLeft': case 'SoftRight': case 'Backspace': closePicker(); return true;
+      default: return true; // swallow other keys so they don't reach the text box underneath
+    }
+  }
+
   function onSearchKey(k) {
+    if (state.picker >= 0) return onPickerKey(k);
     var inInput = state.searchFocus < 0;
     switch (k) {
       case 'ArrowDown': moveSearch(1); return true;
@@ -266,6 +320,7 @@
         else addAndSelect(state.searchResults[state.searchFocus]);
         return true;
       case 'SoftLeft': showPlaces(savedPlaces.length + 1); return true;
+      case 'SoftRight': openPicker(); return true;
       case 'Backspace':
         // In the text box Backspace deletes letters; only an empty box goes back.
         if (inInput && views.searchText()) return false;

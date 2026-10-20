@@ -10,20 +10,54 @@
   var NOWCAST_STEP_MIN = 5;
   var MAX_HOURS = 48;
   var MAX_DAYS = 9;
-  // Pick the 6-hour block starting at 12 UTC as the day's icon, like Yr's daytime symbol.
-  var DAY_SYMBOL_HOURS = [12, 6, 18, 0];
+  var LOCAL_NOON = 12; // the day's icon is the 6-hour block starting closest to local noon
+  var DAY_MS = 86400000;
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
 
-  function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  // Times are shown in the place's own time. `offset` is the place's UTC offset in seconds,
+  // or null/undefined to use the phone's time zone. Callers read the result with getUTC* only.
+  function wall(ms, offset) {
+    var off = typeof offset === 'number' ? offset : -new Date(ms).getTimezoneOffset() * 60;
+    return new Date(ms + off * 1000);
+  }
 
-  function dayKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function hhmm(ms, offset) {
+    var w = wall(ms, offset);
+    return pad(w.getUTCHours()) + ':' + pad(w.getUTCMinutes());
+  }
 
-  function dayLabel(d, now) {
-    if (dayKey(d) === dayKey(now)) return 'Today';
-    var tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    if (dayKey(d) === dayKey(tomorrow)) return 'Tomorrow';
-    return DAYS[d.getDay()] + ' ' + d.getDate() + '.';
+  // Hour label for lists: "07", or "07:30" in half-hour zones.
+  function hourLabel(ms, offset) {
+    var w = wall(ms, offset);
+    return pad(w.getUTCHours()) + (w.getUTCMinutes() ? ':' + pad(w.getUTCMinutes()) : '');
+  }
+
+  function dayKey(ms, offset) {
+    var w = wall(ms, offset);
+    return w.getUTCFullYear() + '-' + pad(w.getUTCMonth() + 1) + '-' + pad(w.getUTCDate());
+  }
+
+  function dayLabel(ms, nowMs, offset) {
+    var key = dayKey(ms, offset);
+    if (key === dayKey(nowMs, offset)) return 'Today';
+    if (key === dayKey(nowMs + DAY_MS, offset)) return 'Tomorrow';
+    var w = wall(ms, offset);
+    return DAYS[w.getUTCDay()] + ' ' + w.getUTCDate() + '.';
+  }
+
+  // "UTC+2", "UTC-4", "UTC+5:30".
+  function utcLabel(offset) {
+    var sign = offset < 0 ? '-' : '+';
+    var abs = Math.abs(offset);
+    var h = Math.floor(abs / 3600);
+    var m = Math.round((abs % 3600) / 60);
+    return 'UTC' + sign + h + (m ? ':' + pad(m) : '');
+  }
+
+  // True when the place's clock differs from the phone's at `ms`.
+  function differsFromPhone(offset, ms) {
+    return typeof offset === 'number' && offset !== -new Date(ms).getTimezoneOffset() * 60;
   }
 
   function compass(fromDeg) {
@@ -88,36 +122,34 @@
   }
 
   // Hourly rows from the current hour, at most 48, with a day label where the date changes.
-  function hourRows(fc, nowMs) {
+  function hourRows(fc, nowMs, offset) {
     var rows = [];
     var lastDay = null;
-    var now = new Date(nowMs);
     var hourStart = nowMs - (nowMs % 3600000);
     for (var i = 0; i < fc.points.length && rows.length < MAX_HOURS; i++) {
       var p = fc.points[i];
       if (p.t < hourStart || !p.sym1) continue;
-      var d = new Date(p.t);
-      var key = dayKey(d);
-      rows.push({ day: key !== lastDay ? dayLabel(d, now) : null, time: pad(d.getHours()), point: p });
+      var key = dayKey(p.t, offset);
+      rows.push({ day: key !== lastDay ? dayLabel(p.t, nowMs, offset) : null, time: hourLabel(p.t, offset), point: p });
       lastDay = key;
     }
     return rows;
   }
 
   // One row per local day: high/low, total precipitation, strongest wind, a daytime symbol.
-  function dayRows(fc, nowMs) {
+  function dayRows(fc, nowMs, offset) {
     var byKey = {};
     var order = [];
-    var now = new Date(nowMs);
-    var todayKey = dayKey(now);
+    var todayKey = dayKey(nowMs, offset);
     for (var i = 0; i < fc.points.length; i++) {
       var p = fc.points[i];
       var d = new Date(p.t);
-      var key = dayKey(d);
+      var key = dayKey(p.t, offset);
       if (key < todayKey) continue;
       var day = byKey[key];
       if (!day) {
-        day = byKey[key] = { key: key, label: dayLabel(d, now), hi: null, lo: null, mm: 0, wind: null, symbols: {} };
+        day = byKey[key] = { key: key, label: dayLabel(p.t, nowMs, offset), hi: null, lo: null, mm: 0, wind: null,
+                             symbol: null, symbolDist: 99 };
         order.push(key);
       }
       if (p.temp !== null) {
@@ -126,17 +158,19 @@
       }
       if (p.wind !== null) day.wind = day.wind === null ? p.wind : Math.max(day.wind, p.wind);
       // Sum non-overlapping 6-hour blocks (00/06/12/18 UTC) so nothing is counted twice.
-      var utcHour = d.getUTCHours();
-      if (utcHour % 6 === 0 && p.mm6 !== null) day.mm += p.mm6;
-      if (p.sym6 && day.symbols[utcHour] === undefined) day.symbols[utcHour] = p.sym6;
+      if (d.getUTCHours() % 6 === 0) {
+        if (p.mm6 !== null) day.mm += p.mm6;
+        var dist = Math.abs(wall(p.t, offset).getUTCHours() - LOCAL_NOON);
+        if (p.sym6 && dist < day.symbolDist) { day.symbol = p.sym6; day.symbolDist = dist; }
+      } else if (!day.symbol && p.sym6) {
+        day.symbol = p.sym6; // no block start on this day yet (e.g. late today)
+      }
     }
     var rows = [];
     for (var k = 0; k < order.length && rows.length < MAX_DAYS; k++) {
       var day2 = byKey[order[k]];
-      var sym = null;
-      for (var h = 0; h < DAY_SYMBOL_HOURS.length && !sym; h++) sym = day2.symbols[DAY_SYMBOL_HOURS[h]] || null;
-      if (!sym) for (var any in day2.symbols) { if (day2.symbols.hasOwnProperty(any)) { sym = day2.symbols[any]; break; } }
-      rows.push({ label: day2.label, hi: day2.hi, lo: day2.lo, mm: Math.round(day2.mm * 10) / 10, wind: day2.wind, symbol: sym });
+      rows.push({ label: day2.label, hi: day2.hi, lo: day2.lo, mm: Math.round(day2.mm * 10) / 10, wind: day2.wind,
+                  symbol: day2.symbol });
     }
     return rows;
   }
@@ -172,9 +206,13 @@
 
   Kuling.fc = {
     pad: pad,
+    wall: wall,
     hhmm: hhmm,
+    hourLabel: hourLabel,
     dayKey: dayKey,
     dayLabel: dayLabel,
+    utcLabel: utcLabel,
+    differsFromPhone: differsFromPhone,
     compass: compass,
     temp: temp,
     mm: mm,

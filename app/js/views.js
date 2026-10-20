@@ -74,12 +74,13 @@
   }
 
   function attribution(main) {
-    main.appendChild(el('div', 'attr', 'Data: MET Norway (CC BY 4.0) · Kartverket'));
+    main.appendChild(el('div', 'attr', 'Data: MET Norway (CC BY 4.0) · Kartverket · Open-Meteo/GeoNames'));
   }
 
   // ---------- Now ----------
 
-  function renderNow(forecast, nowcastJson, nowMs) {
+  // offset: the place's UTC offset in seconds, or null for phone time.
+  function renderNow(forecast, nowcastJson, nowMs, offset) {
     var main = $('main');
     clear(main);
     var p = fc.currentPoint(forecast, nowMs);
@@ -105,7 +106,7 @@
     if (nc) main.appendChild(nowcastBlock(nc));
 
     var strip = el('div', 'strip');
-    var rows = fc.hourRows(forecast, nowMs);
+    var rows = fc.hourRows(forecast, nowMs, offset);
     for (var i = 1; i <= NOW_HOURS && i < rows.length; i++) {
       var col = el('div', 'col');
       col.appendChild(el('div', 'col-t', rows[i].time));
@@ -135,10 +136,10 @@
 
   // ---------- Hours / Days ----------
 
-  function renderHours(forecast, nowMs) {
+  function renderHours(forecast, nowMs, offset) {
     var main = $('main');
     clear(main);
-    var rows = fc.hourRows(forecast, nowMs);
+    var rows = fc.hourRows(forecast, nowMs, offset);
     var list = el('div', 'rows');
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
@@ -158,10 +159,10 @@
     attribution(main);
   }
 
-  function renderDays(forecast, nowMs) {
+  function renderDays(forecast, nowMs, offset) {
     var main = $('main');
     clear(main);
-    var rows = fc.dayRows(forecast, nowMs);
+    var rows = fc.dayRows(forecast, nowMs, offset);
     var list = el('div', 'rows');
     for (var i = 0; i < rows.length; i++) {
       var d = rows[i];
@@ -240,6 +241,30 @@
     return input ? input.value : '';
   }
 
+  // Letter picker for the search box: a grid of letters the keypad may not offer.
+  function renderPicker(chars, index, columns) {
+    var box = $('picker');
+    clear(box);
+    for (var i = 0; i < chars.length; i++) {
+      box.appendChild(el('span', i === index ? 'sel' : '', chars[i]));
+      if ((i + 1) % columns === 0) box.appendChild(el('br'));
+    }
+    box.hidden = false;
+  }
+
+  function hidePicker() { $('picker').hidden = true; }
+
+  // Inserts text at the cursor of the search box and keeps typing there.
+  function insertText(text) {
+    var input = $('q');
+    if (!input) return;
+    var start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+    var end = typeof input.selectionEnd === 'number' ? input.selectionEnd : start;
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    input.focus();
+    try { input.setSelectionRange(start + text.length, start + text.length); } catch (e) { /* old engines */ }
+  }
+
   function scroll(dy) { $('main').scrollTop += dy; }
   function scrollTop() { $('main').scrollTop = 0; }
 
@@ -255,6 +280,9 @@
     renderMenu: renderMenu,
     renderSearch: renderSearch,
     searchText: searchText,
+    renderPicker: renderPicker,
+    hidePicker: hidePicker,
+    insertText: insertText,
     scroll: scroll,
     scrollTop: scrollTop
   };
