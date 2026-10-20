@@ -4,7 +4,7 @@
   "private": true,
   "description": "Weather for Norway (MET Norway data) for the Nokia 8110 4G on KaiOS 2.5 / GerdaOS.",
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "node --test tests/*.test.js && python3 -m unittest discover -s tests -p 'test_*.py'",
     "build": "bash scripts/build.sh",
     "install-phone": "python3 scripts/install.py",
     "uninstall-phone": "python3 scripts/uninstall.py"
