@@ -53,9 +53,100 @@ because the app is privileged and uses `systemXHR`). It also rounds coordinates 
 described above. MET allows direct calls from low-volume apps. A wider release should go through a
 caching proxy instead (see their terms of service).
 
+## Certificates: making api.met.no work on a 2016 phone
+
+Out of the box, Kuling showed **"No connection"** on the 8110, while place search and other apps
+worked. The phone log (`adb logcat`) explained it:
+
+```
+api.met.no:443 uses an invalid security certificate.
+Error code: SEC_ERROR_UNKNOWN_ISSUER
+```
+
+### Cause
+
+`api.met.no` uses a GÉANT certificate issued by HARICA:
+
+```
+*.api.met.no
+  <- GEANT TLS RSA 1
+  <- HARICA TLS RSA Root CA 2021   (cross-signed, sent by the server)
+  <- Hellenic Academic and Research Institutions RootCA 2015
+```
+
+The phone runs Gecko 48 with a 2016 NSS and a 2016 list of built-in roots. That list has
+*HARICA RootCA 2011* but not *RootCA 2015*, so the chain cannot reach a trusted root. Plain HTTP is no
+way around it, because MET redirects to HTTPS. Kartverket (DigiCert) and the radio streams use roots
+the phone already knows.
+
+### Fix: trust HARICA RootCA 2015 in the phone's NSS database
+
+Current Firefox, Chrome and macOS already trust this root (valid until 2040). Adding it brings the
+phone in line with a modern browser for this one CA. It is trusted for websites only.
+
+1. **Get the genuine root.** It was taken from macOS's `/etc/ssl/cert.pem` and cross-checked against
+   curl's Mozilla-derived `cacert.pem`. Both give SHA-256
+   `A0:40:92:9A:02:CE:53:B4:AC:F4:F2:FF:C6:98:1C:E4:49:6F:75:5E:6D:45:FE:0B:2A:69:2B:CD:52:52:3F:36`.
+   `openssl verify` confirmed that MET's served chain validates against it.
+2. **Find the database b2g really uses.** `/proc/<b2g pid>/fd` shows
+   `/data/b2g/mozilla/<profile>.default/cert9.db` and `key4.db` (SQLite NSS databases).
+3. **Add the certificate** with Mozilla's tools (`brew install nss`, then
+   `certutil -A -t "C,,"`), working on copies pulled while b2g is stopped (`adb shell stop b2g`).
+4. **First surprise: trust format.** NSS 3.131 stores trust as a PKCS#11 3.2 `CKO_TRUST` object
+   (class `0x0b`). Gecko 48's NSS only reads the legacy `CKO_NSS_TRUST` (class `0xce534353`), so the
+   root was present but untrusted. The record was rewritten in the legacy format, mirroring the
+   working *ISRG Root X1* record already in the database: server-auth `CKT_NSS_TRUSTED_DELEGATOR`,
+   other uses `CKT_NSS_VALID_DELEGATOR`, plus the certificate's SHA-1 and MD5 hashes.
+5. **Second surprise: signed trust.** It still had no effect. Tracing NSS's PKCS#11 calls
+   (`NSS_DEBUG_PKCS11_MODULE`) showed the trust lookup returning nothing, although SQLite matched the
+   row. NSS signs "authenticated attributes" (trust values, cert hashes) and ignores unsigned ones.
+   The signatures sit in `key4.db`'s `metaData` table as `sig_cert_<object id>_<attribute>`:
+   ```
+   pass_key = SHA1(global_salt || password)        # empty password on this phone;
+                                                   # global_salt = metaData['password'].item1
+   key      = PBKDF2-HMAC-SHA256(pass_key, salt, iterations=1, 32 bytes)
+   mac      = HMAC-SHA256(key, BE32(object id) || BE32(attribute type) || value)
+   stored   = DER: PBMAC1 { PBKDF2 { salt, 1, 32, hmacWithSHA256 }, hmacWithSHA256 } + OCTET STRING mac
+   ```
+   A short Python implementation of this reproduced **all 14 existing ISRG signatures byte for
+   byte** before anything was written. It then signed the seven attributes of the new trust record.
+6. **Verify before pushing.** On the local copies, `certutil -L` shows the root as `C,c,c`.
+   `vfychain -pp -u 1` reports *"Chain is good!"* for MET's chain and for a Let's Encrypt control chain.
+7. **Push and restart.** The script first checked that the phone's databases had not changed since
+   they were copied, backed both up on the phone, pushed `cert9.db` + `key4.db`, then ran
+   `adb shell start b2g`. Kuling loaded forecasts right after.
+
+### Backups and undo
+
+The original and intermediate states are kept on the phone in
+`/data/b2g/mozilla/<profile>.default/`:
+
+| File | State |
+|---|---|
+| `cert9.db.bak-1792531491` | original, before any change |
+| `cert9.db.bak-modern-1792531810` | root added, trust in the new (unreadable) format |
+| `cert9.db.bak-presign-1792532299`, `key4.db.bak-presign-1792532299` | legacy trust, not yet signed |
+
+To undo: `adb shell stop b2g`, copy the original `cert9.db` back (and the `key4.db` backup), then
+`adb shell start b2g`.
+
+### Notes
+
+- This is a per-phone change to the trust store. It does not ship with the app. Another 8110 needs
+  the same fix, or a caching proxy for `api.met.no` on a host whose certificate the phone trusts.
+  MET recommends a proxy for apps anyway.
+- The signatures are an integrity check under an empty password, not a lock against the owner. Get
+  them wrong and NSS just ignores the trust (or, at worst, the store fails to load until restored
+  from the backup).
+- The same applies to any other site using a CA newer than 2016 that is missing from the phone. The
+  Let's Encrypt roots (ISRG X1/X2) were already in this GerdaOS phone's database, stored the same
+  way (legacy trust record plus signatures, added before this project), which is why those sites
+  work.
+
 ## Requirements
 
 - Nokia 8110 4G (or another KaiOS 2.5 phone) with **root adb**
+- The HARICA RootCA 2015 trusted on the phone (see [Certificates](#certificates-making-apimetno-work-on-a-2016-phone))
 - `adb`, Python 3, Node 18+ (tests only), `zip`
 
 ## Build and install
