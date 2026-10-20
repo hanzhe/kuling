@@ -1,0 +1,34 @@
+{
+  "name": "Kuling",
+  "version": "1.0.0",
+  "description": "Weather for Norway from MET Norway: now, hour by hour, and 9 days, with rain radar for the next 90 minutes.",
+  "launch_path": "/index.html",
+  "type": "privileged",
+  "origin": "app://kuling.hanzhe.dev",
+  "default_locale": "en-US",
+  "categories": ["weather"],
+  "theme_color": "#1b6ec2",
+  "background_color": "#0d1b2a",
+  "icons": {
+    "56": "/icons/icon56x56.png",
+    "112": "/icons/icon112x112.png"
+  },
+  "developer": {
+    "name": "hanzhe"
+  },
+  "permissions": {
+    "systemXHR": {
+      "description": "Fetch forecasts from api.met.no and place names from Kartverket with a proper User-Agent."
+    },
+    "geolocation": {
+      "description": "Show the weather where you are (My location)."
+    }
+  },
+  "locales": {
+    "en-US": {
+      "name": "Kuling",
+      "subtitle": "Weather for Norway",
+      "description": "Weather for Norway from MET Norway."
+    }
+  }
+}

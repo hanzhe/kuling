@@ -1,0 +1,82 @@
+/* 240x320: header 26 / tabs 24 / content / softkeys 26 */
+html, body { margin: 0; padding: 0; height: 100%; background: #0d1b2a; color: #f1f5f9; }
+body { font: 15px/1.2 sans-serif; overflow: hidden; }
+[hidden] { display: none !important; }
+
+#top { position: fixed; top: 0; left: 0; right: 0; height: 26px; line-height: 26px; padding: 0 8px;
+       background: #1b6ec2; color: #fff; white-space: nowrap; overflow: hidden; }
+#place { font-weight: bold; font-size: 16px; }
+#updated { float: right; font-size: 12px; opacity: 0.85; }
+
+#tabs { position: fixed; top: 26px; left: 0; right: 0; height: 24px; line-height: 22px; background: #10263d;
+        text-align: center; font-size: 14px; }
+#tabs span { display: inline-block; width: 33%; color: #8aa4bf; border-bottom: 2px solid transparent; }
+#tabs span.on { color: #fff; font-weight: bold; border-bottom-color: #ffd23f; }
+
+#main { position: fixed; top: 50px; bottom: 26px; left: 0; right: 0; overflow-y: auto; }
+#tabs[hidden] + #main { top: 26px; }
+
+#soft { position: fixed; left: 0; right: 0; bottom: 0; height: 26px; line-height: 26px; background: #000;
+        font-size: 14px; }
+#soft span { position: absolute; top: 0; }
+#sl { left: 8px; }
+#sc { left: 70px; right: 70px; text-align: center; font-weight: bold; }
+#sr { right: 8px; }
+
+#toast { position: fixed; left: 6px; right: 6px; bottom: 32px; padding: 6px 8px; background: #f1f5f9;
+         color: #0d1b2a; font-size: 14px; border-radius: 3px; }
+
+.ico { vertical-align: middle; }
+.warm { color: #ff6b5b; }
+.cold { color: #5bb4ff; }
+.arrow { display: inline-block; font-weight: bold; color: #ffd23f; }
+.msg { padding: 30px 12px; text-align: center; color: #cbd5e1; }
+.msg-sub { margin-top: 8px; font-size: 13px; color: #8aa4bf; }
+.attr { padding: 6px 8px 8px; font-size: 10px; color: #6b84a0; }
+
+/* Now */
+.hero { padding: 6px 8px 0; height: 76px; }
+.hero .ico { float: left; }
+.hero-r { margin-left: 80px; padding-top: 2px; }
+.big { font-size: 42px; font-weight: bold; line-height: 46px; }
+.desc { font-size: 14px; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.line { padding: 2px 8px; font-size: 15px; }
+.rain { float: right; color: #9ecbff; font-size: 14px; }
+.nc { margin: 4px 8px 0; padding: 4px 6px; background: #10263d; border-radius: 3px; }
+.nc-text { font-size: 13px; color: #cbd5e1; }
+.nc-bars { height: 14px; margin-top: 3px; white-space: nowrap; font-size: 0; }
+.nc-bars span { display: inline-block; margin-right: 2px; background: #2a4563; vertical-align: bottom; }
+.nc-bars span.wet { background: #3d9bff; }
+.strip { margin-top: 6px; padding: 0 4px; white-space: nowrap; font-size: 0; }
+.col { display: inline-block; width: 25%; text-align: center; font-size: 13px; }
+.col-t { color: #8aa4bf; }
+.col-v { font-size: 14px; font-weight: bold; }
+
+/* Hours / Days */
+.day-hdr { padding: 6px 8px 2px; font-size: 12px; font-weight: bold; color: #ffd23f; text-transform: uppercase; }
+.row { height: 30px; line-height: 30px; padding: 0 6px; border-bottom: 1px solid #16304b; white-space: nowrap; }
+.row.day { height: 38px; line-height: 38px; }
+.row .ico { margin: 0 4px; }
+.c-time { display: inline-block; width: 22px; color: #8aa4bf; }
+.c-temp { display: inline-block; width: 36px; font-weight: bold; font-size: 16px; }
+.c-rain { display: inline-block; width: 50px; color: #9ecbff; font-size: 13px; }
+.c-wind { float: right; font-size: 13px; color: #cbd5e1; }
+.c-day { display: inline-block; width: 70px; font-size: 14px; }
+.c-hilo { display: inline-block; width: 64px; font-weight: bold; }
+.c-hilo .lo { font-weight: normal; color: #8aa4bf; font-size: 13px; }
+.c-extra { float: right; text-align: right; line-height: 15px; padding-top: 4px; font-size: 12px; }
+.c-extra .c-rain { width: auto; }
+.c-wnd { color: #cbd5e1; }
+
+/* Places / search */
+.menu { list-style: none; margin: 0; padding: 0; }
+.menu li { padding: 5px 8px; border-bottom: 1px solid #16304b; }
+.menu li.sel { background: #f1f5f9; color: #0d1b2a; }
+.num { display: inline-block; width: 18px; font-weight: bold; color: #ffd23f; }
+.sel .num { color: #1b6ec2; }
+.m-label { font-size: 16px; }
+.m-sub { font-size: 12px; color: #8aa4bf; margin-left: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sel .m-sub { color: #3b5570; }
+.q { display: block; box-sizing: border-box; width: 224px; margin: 8px; padding: 6px; font-size: 16px;
+     border: 2px solid #1b6ec2; background: #fff; color: #0d1b2a; }
+.s-status { padding: 0 8px 4px; font-size: 12px; color: #8aa4bf; }
